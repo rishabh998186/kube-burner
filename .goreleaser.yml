@@ -33,6 +33,30 @@ archives:
       format: zip
     files:
       - LICENSE
+
+sboms:
+  - id: spdx-archive
+    artifacts: archive
+    documents:
+      - "${artifact}.spdx.json"
+    args: ["scan", "${artifact}", "-o", "spdx-json=${document}"]
+  - id: cyclonedx-archive
+    artifacts: archive
+    documents:
+      - "${artifact}.cdx.json"
+    args: ["scan", "${artifact}", "-o", "cyclonedx-json=${document}"]
+
+  - id: spdx-project
+    artifacts: any
+    documents:
+      - "{{ .ProjectName }}-{{ .Tag }}-sbom.spdx.json"
+    args: ["scan", "dir:.", "-o", "spdx-json=${document}"]
+  - id: cyclonedx-project
+    artifacts: any
+    documents:
+      - "{{ .ProjectName }}-{{ .Tag }}-sbom.cdx.json"
+    args: ["scan", "dir:.", "-o", "cyclonedx-json=${document}"]
+
 changelog:
   use: github
   sort: asc

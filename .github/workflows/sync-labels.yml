@@ -1,0 +1,47 @@
+name: Sync Prow Labels
+on:
+  push:
+    paths:
+      - '.prowlabels.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write # Required to manage labels
+
+jobs:
+  sync-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Sync Labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          
+          echo "Fetching existing labels..."
+          # Fetch ALL existing labels into a file for checking (avoid repeated API calls)
+          gh label list --repo $REPO --limit 200 --json name --jq '.[].name' > existing_labels.txt
+          cat existing_labels.txt
+
+          echo "Parsing .prowlabels.yaml..."
+          # Regex matches: optional whitespace, dash, whitespace, then the label name
+          grep -E "^\s*-\s+" .prowlabels.yaml | awk '{print $2}' | while read -r label; do
+            # Trim any whitespace
+            label=$(echo "$label" | xargs)
+            
+            echo "Processing: '$label'"
+            
+            # Check against the local file instead of calling API every time
+            if ! grep -Fxq "$label" existing_labels.txt; then
+              echo "Creating missing label: $label"
+              # Create label
+              gh label create "$label" --repo $REPO --color "C5DEF5" --description "Prow-style label" || echo "Failed to create $label (might exist or permission error)"
+            else
+              echo "Label '$label' already exists."
+            fi
+          done

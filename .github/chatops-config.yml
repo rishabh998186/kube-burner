@@ -1,0 +1,38 @@
+# ChatOps Configuration
+# Defines permissions and command mappings for the implementation.
+
+permissions:
+  default: write # Users needs write access to trigger commands by default
+  commands:
+    # Public commands (commenter permissions checked by workflow)
+    retest: write
+    lgtm: write
+    approve: write
+    label: write
+    hold: write
+    assign: write # Self-assign is open, assigning others requires write
+
+workflows:
+  dispatcher: .github/workflows/chatops-dispatch.yml
+  commands:
+    lgtm: .github/workflows/chatops-lgtm.yml
+    approve: .github/workflows/chatops-approve.yml
+    hold: .github/workflows/chatops-hold.yml
+    retest: .github/workflows/chatops-retest.yml
+    label: .github/workflows/chatops-label.yml
+    assign: .github/workflows/chatops-assign.yml
+    lifecycle: .github/workflows/chatops-lifecycle.yml
+    help: .github/workflows/chatops-help.yml
+
+automation:
+  auto_merge:
+    enabled: true
+    required_labels:
+      - lgtm
+      - approved
+    excluded_labels:
+      - do-not-merge/hold
+  stale:
+    enabled: true
+    days_until_stale: 90
+    days_until_close: 7

@@ -1,0 +1,38 @@
+name: ChatOps Assign
+on:
+  repository_dispatch:
+    types: [assign-command, unassign-command]
+permissions:
+  issues: write
+  pull-requests: write
+jobs:
+  assign:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Handle Assign/Unassign
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.client_payload.github.payload.issue.number }}
+          REPO: ${{ github.event.client_payload.github.payload.repository.full_name }}
+          COMMAND: ${{ github.event.client_payload.slash_command.command }}
+          ARGS: ${{ github.event.client_payload.slash_command.args }}
+          COMMENTER: ${{ github.event.client_payload.github.payload.comment.user.login }}
+        run: |
+          # Determine user to action
+          USER=$ARGS
+          if [ -z "$USER" ]; then
+            USER=$COMMENTER
+          fi
+          
+          # Strip '@' if present
+          USER=$(echo $USER | tr -d '@')
+          
+          if [ "$COMMAND" == "assign" ]; then
+            echo "Assigning $USER to #$ISSUE_NUMBER"
+            gh issue edit $ISSUE_NUMBER --repo $REPO --add-assignee $USER
+          elif [ "$COMMAND" == "unassign" ]; then
+            echo "Unassigning $USER from #$ISSUE_NUMBER"
+            gh issue edit $ISSUE_NUMBER --repo $REPO --remove-assignee $USER
+          fi
+
+

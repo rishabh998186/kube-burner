@@ -2,7 +2,16 @@
 name: Execute tests on k8s and OCP
 on:
   workflow_dispatch:
+    inputs:
+      sha:
+        description: 'SHA to test'
+        required: false
   workflow_call:
+    inputs:
+      sha:
+        description: 'SHA to test'
+        required: false
+        type: string
 jobs:
   fetch-latest-kind-node-tags:
     runs-on: ubuntu-latest
@@ -42,7 +51,7 @@ jobs:
       uses: actions/checkout@v6
       with:
         fetch-depth: 1
-        ref: ${{ github.event.pull_request.head.sha }}
+        ref: ${{ inputs.sha || github.event.pull_request.head.sha }}
         persist-credentials: false
 
     - name: Download kube-burner binary

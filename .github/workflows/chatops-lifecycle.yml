@@ -1,0 +1,38 @@
+name: ChatOps Lifecycle
+on:
+  repository_dispatch:
+    types: [close-command, reopen-command, lock-command, unlock-command]
+permissions:
+  issues: write
+  pull-requests: write
+jobs:
+  lifecycle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Handle Lifecycle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.client_payload.github.payload.issue.number }}
+          REPO: ${{ github.event.client_payload.github.payload.repository.full_name }}
+          COMMAND: ${{ github.event.client_payload.slash_command.command }}
+        run: |
+          case $COMMAND in
+            close)
+              echo "Closing #$ISSUE_NUMBER"
+              gh issue close $ISSUE_NUMBER --repo $REPO
+              ;;
+            reopen)
+              echo "Reopening #$ISSUE_NUMBER"
+              gh issue reopen $ISSUE_NUMBER --repo $REPO
+              ;;
+            lock)
+              echo "Locking #$ISSUE_NUMBER"
+              gh issue lock $ISSUE_NUMBER --repo $REPO
+              ;;
+            unlock)
+              echo "Unlocking #$ISSUE_NUMBER"
+              gh issue unlock $ISSUE_NUMBER --repo $REPO
+              ;;
+          esac
+
+

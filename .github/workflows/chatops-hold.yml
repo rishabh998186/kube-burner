@@ -1,0 +1,27 @@
+name: ChatOps Hold
+on:
+  repository_dispatch:
+    types: [hold-command, unhold-command]
+permissions:
+  issues: write
+  pull-requests: write
+jobs:
+  hold:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Handle Hold
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.client_payload.github.payload.issue.number }}
+          REPO: ${{ github.event.client_payload.github.payload.repository.full_name }}
+          COMMAND: ${{ github.event.client_payload.slash_command.command }}
+        run: |
+          if [ "$COMMAND" == "hold" ]; then
+            echo "Holding #$ISSUE_NUMBER"
+            gh issue edit $ISSUE_NUMBER --repo $REPO --add-label do-not-merge/hold
+          elif [ "$COMMAND" == "unhold" ]; then
+            echo "Unholding #$ISSUE_NUMBER"
+            gh issue edit $ISSUE_NUMBER --repo $REPO --remove-label do-not-merge/hold
+          fi
+
+

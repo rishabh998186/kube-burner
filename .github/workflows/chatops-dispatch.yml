@@ -1,0 +1,37 @@
+name: Slash Command Dispatch
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  slash_command_dispatch:
+    permissions:
+      contents: read
+      actions: write
+      issues: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Slash Command Dispatch
+        uses: peter-evans/slash-command-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          reaction-token: ${{ secrets.GITHUB_TOKEN }}
+          reaction-type: "+1"
+          commands: |
+            lgtm
+            approve
+            hold
+            unhold
+            retest
+            assign
+            unassign
+            label
+            remove-label
+            close
+            reopen
+            lock
+            unlock
+            cc
+            uncc
+            help

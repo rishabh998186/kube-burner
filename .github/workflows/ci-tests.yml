@@ -2,6 +2,10 @@ name: CI tests
 on:
   workflow_call:
   workflow_dispatch:
+    inputs:
+      sha:
+        description: 'SHA to test'
+        required: false
   pull_request_target:
     branches:
       - master
@@ -23,4 +27,6 @@ jobs:
   tests:
     needs: build
     uses: ./.github/workflows/test-k8s.yml
+    with:
+      sha: ${{ inputs.sha }}
     secrets: inherit

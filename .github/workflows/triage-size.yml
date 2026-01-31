@@ -1,0 +1,52 @@
+name: Triage Size
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  size-label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Calculate Size
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Fetch PR additions and deletions
+          STATS=$(gh pr view $PR_NUMBER --repo $REPO --json additions,deletions)
+          ADDITIONS=$(echo $STATS | jq .additions)
+          DELETIONS=$(echo $STATS | jq .deletions)
+          TOTAL=$(($ADDITIONS + $DELETIONS))
+
+          echo "Total changes: $TOTAL"
+
+          if [ "$TOTAL" -lt 10 ]; then
+            SIZE="size/XS"
+          elif [ "$TOTAL" -lt 30 ]; then
+            SIZE="size/S"
+          elif [ "$TOTAL" -lt 100 ]; then
+            SIZE="size/M"
+          elif [ "$TOTAL" -lt 500 ]; then
+            SIZE="size/L"
+          else
+            SIZE="size/XL"
+          fi
+
+          echo "Determined size label: $SIZE"
+          
+          # Remove existing size labels
+          gh pr edit $PR_NUMBER --repo $REPO --remove-label "size/XS" || true
+          gh pr edit $PR_NUMBER --repo $REPO --remove-label "size/S" || true
+          gh pr edit $PR_NUMBER --repo $REPO --remove-label "size/M" || true
+          gh pr edit $PR_NUMBER --repo $REPO --remove-label "size/L" || true
+          gh pr edit $PR_NUMBER --repo $REPO --remove-label "size/XL" || true
+
+          # Add new size label
+          gh pr edit $PR_NUMBER --repo $REPO --add-label "$SIZE"

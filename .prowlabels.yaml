@@ -1,0 +1,41 @@
+# .prowlabels.yaml
+# Configuration for the /label command
+
+labels:
+  # Area labels
+  - area/ci
+  - area/docs
+  - area/testing
+  - area/workloads
+  - area/measurements
+  
+  # Kind labels
+  - kind/bug
+  - kind/feature
+  - kind/cleanup
+  - kind/documentation
+  - kind/fails-release-blocking
+  
+  # Priority
+  - priority/critical-urgent
+  - priority/important-soon
+  - priority/important-longterm
+  - priority/backlog
+
+  # Triage
+  - triage/needs-information
+  - triage/support
+  - triage/accepted
+  
+  # PR State
+  - approved
+  - lgtm
+  - do-not-merge/hold
+  - do-not-merge/work-in-progress
+
+  # Size
+  - size/XS
+  - size/S
+  - size/M
+  - size/L
+  - size/XL

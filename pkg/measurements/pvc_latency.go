@@ -171,15 +171,13 @@ func (p *pvcLatency) handleUpdatePVC(obj any) {
 
 		// Check if resize completed by comparing capacity
 		if pm.resizeStarted > 0 && pm.ResizeLatency == 0 {
-			if pvc.Status.Capacity != nil {
-				currentCapacity := pvc.Status.Capacity.Storage().String()
-				// If capacity has changed from original size, it's done
-				if currentCapacity != pm.Size {
-					pm.ResizeLatency = int(time.Now().UTC().UnixMilli() - pm.resizeStarted)
-					pm.ResizedCapacity = currentCapacity
-					log.Debugf("PVC %s resize completed (capacity update): %s -> %s in %dms",
-						pvc.Name, pm.Size, currentCapacity, pm.ResizeLatency)
-				}
+			currentCapacity := pvc.Status.Capacity.Storage().String()
+			// If capacity has changed from original size, it's done
+			if currentCapacity != pm.Size {
+				pm.ResizeLatency = int(time.Now().UTC().UnixMilli() - pm.resizeStarted)
+				pm.ResizedCapacity = currentCapacity
+				log.Debugf("PVC %s resize completed (capacity update): %s -> %s in %dms",
+					pvc.Name, pm.Size, currentCapacity, pm.ResizeLatency)
 			}
 		}
 

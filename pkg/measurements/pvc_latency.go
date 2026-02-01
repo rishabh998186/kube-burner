@@ -101,10 +101,15 @@ func (plmf pvcLatencyMeasurementFactory) NewMeasurement(jobConfig *config.Job, c
 
 // creates pvc metric
 func (p *pvcLatency) handleCreatePVC(obj any) {
-	pvc, err := util.ConvertAnyToTyped[corev1.PersistentVolumeClaim](obj)
-	if err != nil {
-		log.Errorf("failed to convert to PersistentVolumeClaim: %v", err)
-		return
+	var err error
+	// Verify that object type is pvc
+	pvc, ok := obj.(*corev1.PersistentVolumeClaim)
+	if !ok {
+		pvc, err = util.ConvertAnyToTyped[corev1.PersistentVolumeClaim](obj)
+		if err != nil {
+			log.Errorf("failed to convert to PersistentVolumeClaim: %v", err)
+			return
+		}
 	}
 	log.Tracef("handleCreatePVC: %s", pvc.Name)
 	pvcLabels := pvc.GetLabels()
@@ -135,7 +140,27 @@ func (p *pvcLatency) handleUpdatePVC(obj any) {
 	if value, exists := p.Metrics.Load(string(pvc.UID)); exists {
 		pm := value.(pvcMetric)
 		log.Tracef("handleUpdatePVC: PVC: [%s], Version: [%s], Phase: [%s]", pvc.Name, pvc.ResourceVersion, pvc.Status.Phase)
-		if pm.bound == 0 && pm.lost == 0 {
+
+		requestedSize := pvc.Spec.Resources.Requests.Storage().String()
+
+		// Detect resize start by spec change (works for all provisioners)
+		if requestedSize != pm.Size && pm.resizeStarted == 0 {
+			pm.resizeStarted = time.Now().UTC().UnixMilli()
+			log.Debugf("PVC %s resize started: %s -> %s", pvc.Name, pm.Size, requestedSize)
+		}
+
+		// Check if resize completed by comparing capacity
+		if pm.resizeStarted > 0 && pm.ResizeLatency == 0 {
+			currentCapacity := pvc.Status.Capacity.Storage().String()
+			// If capacity has changed from original size, it's done
+			if currentCapacity != pm.Size {
+				pm.ResizeLatency = int(time.Now().UTC().UnixMilli() - pm.resizeStarted)
+				pm.ResizedCapacity = currentCapacity
+				log.Debugf("PVC %s resize completed (capacity update): %s -> %s in %dms",
+					pvc.Name, pm.Size, currentCapacity, pm.ResizeLatency)
+			}
+		} else if pm.bound == 0 && pm.lost == 0 && requestedSize == pm.Size {
+			// Only track phase changes if we're NOT in a resize operation
 			// https://pkg.go.dev/k8s.io/api/core/v1#PersistentVolumeClaimPhase
 			if pvc.Status.Phase == corev1.ClaimPending {
 				if pm.pending == 0 {
@@ -155,32 +180,9 @@ func (p *pvcLatency) handleUpdatePVC(obj any) {
 					pm.lost = time.Now().UTC().UnixMilli()
 				}
 			}
-			p.Metrics.Store(string(pvc.UID), pm)
 		} else {
 			log.Tracef("Skipping update for phase [%s] as PVC is already bound or lost", pvc.Status.Phase)
 		}
-
-		// Detect resize start by spec change (works for all provisioners)
-		if pvc.Spec.Resources.Requests.Storage() != nil {
-			requestedSize := pvc.Spec.Resources.Requests.Storage().String()
-			if requestedSize != pm.Size && pm.resizeStarted == 0 {
-				pm.resizeStarted = time.Now().UTC().UnixMilli()
-				log.Debugf("PVC %s resize started: %s -> %s", pvc.Name, pm.Size, requestedSize)
-			}
-		}
-
-		// Check if resize completed by comparing capacity
-		if pm.resizeStarted > 0 && pm.ResizeLatency == 0 {
-			currentCapacity := pvc.Status.Capacity.Storage().String()
-			// If capacity has changed from original size, it's done
-			if currentCapacity != pm.Size {
-				pm.ResizeLatency = int(time.Now().UTC().UnixMilli() - pm.resizeStarted)
-				pm.ResizedCapacity = currentCapacity
-				log.Debugf("PVC %s resize completed (capacity update): %s -> %s in %dms",
-					pvc.Name, pm.Size, currentCapacity, pm.ResizeLatency)
-			}
-		}
-
 		p.Metrics.Store(string(pvc.UID), pm)
 	}
 }
@@ -188,9 +190,6 @@ func (p *pvcLatency) handleUpdatePVC(obj any) {
 // start pvcLatency measurement
 func (p *pvcLatency) Start(measurementWg *sync.WaitGroup) error {
 	defer measurementWg.Done()
-	if p.JobConfig.JobType == config.ReadJob {
-		log.Fatalf("Unsupported jobType:%s for pvcLatency metric", p.JobConfig.JobType)
-	}
 	gvr, err := util.ResourceToGVR(p.RestConfig, "PersistentVolumeClaim", "v1")
 	if err != nil {
 		return fmt.Errorf("error getting GVR for %s: %w", "PersistentVolumeClaim", err)
@@ -199,7 +198,7 @@ func (p *pvcLatency) Start(measurementWg *sync.WaitGroup) error {
 	// Preload existing PVCs so patch jobs (resize-volumes) have metrics state
 	pvcs, err := p.ClientSet.CoreV1().PersistentVolumeClaims("").List(
 		context.TODO(),
-		metav1.ListOptions{LabelSelector: p.LabelSelector},
+		metav1.ListOptions{},
 	)
 	if err != nil {
 		log.Errorf("Error listing PVCs for preload: %v", err)
@@ -262,7 +261,6 @@ func (p *pvcLatency) normalizeMetrics() float64 {
 			if m.ResizedCapacity == "" {
 				m.ResizedCapacity = "unknown (calculated at stop)"
 			}
-			log.Infof("PVC %v resize latency calculated at job end: %dms", m.Name, m.ResizeLatency)
 		}
 		// If a pvc does not reach the stable state, we skip that one
 		if m.bound == 0 && m.lost == 0 {

@@ -16,12 +16,10 @@ jobs:
           REPO: ${{ github.event.client_payload.github.payload.repository.full_name }}
           COMMAND: ${{ github.event.client_payload.slash_command.command }}
         run: |
-          if [ "$COMMAND" == "hold" ]; then
-            echo "Holding #$ISSUE_NUMBER"
-            gh issue edit $ISSUE_NUMBER --repo $REPO --add-label do-not-merge/hold
-          elif [ "$COMMAND" == "unhold" ]; then
-            echo "Unholding #$ISSUE_NUMBER"
-            gh issue edit $ISSUE_NUMBER --repo $REPO --remove-label do-not-merge/hold
+          if [ "$COMMAND" = "hold" ]; then
+            echo "Adding hold label to #$ISSUE_NUMBER"
+            gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "do-not-merge/hold"
+          else
+            echo "Removing hold label from #$ISSUE_NUMBER"
+            gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --remove-label "do-not-merge/hold"
           fi
-
-

@@ -18,7 +18,7 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.client_payload.github.payload.issue.number }}
           REPO: ${{ github.event.client_payload.github.payload.repository.full_name }}
           COMMAND: ${{ github.event.client_payload.slash_command.command }}
-          ARGS: ${{ github.event.client_payload.slash_command.args }}
+          ARGS: ${{ github.event.client_payload.slash_command.args.all }}
         run: |
           LABEL=$ARGS
           

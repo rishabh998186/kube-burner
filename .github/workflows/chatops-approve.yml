@@ -1,4 +1,4 @@
-name: ChatOps Approve
+name: ChatOps Approve  
 on:
   repository_dispatch:
     types: [approve-command]
@@ -14,6 +14,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.client_payload.github.payload.issue.number }}
           REPO: ${{ github.event.client_payload.github.payload.repository.full_name }}
-        run: gh issue edit $ISSUE_NUMBER --repo $REPO --add-label approved
-
-
+        run: |
+          echo "Adding 'approved' label to #$ISSUE_NUMBER"
+          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "approved"

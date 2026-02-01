@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Slash Command Dispatch
-        uses: peter-evans/slash-command-dispatch@v3
+        uses: peter-evans/slash-command-dispatch@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           reaction-token: ${{ secrets.GITHUB_TOKEN }}

@@ -10,6 +10,11 @@ jobs:
   lgtm:
     runs-on: ubuntu-latest
     steps:
+      - name: Dump client payload
+        env:
+          PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        run: echo "$PAYLOAD"
+
       - name: Add LGTM label
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,45 @@
+name: ChatOps People
+on:
+  repository_dispatch:
+    types: [assign-command, unassign-command, cc-command, uncc-command]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  people:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Handle People & Reviews
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.client_payload.github.payload.issue.number }}
+          REPO: ${{ github.event.client_payload.github.payload.repository.full_name }}
+          COMMAND: ${{ github.event.client_payload.slash_command.command }}
+          ARGS: ${{ github.event.client_payload.slash_command.args.all }}
+          COMMENTER: ${{ github.event.client_payload.github.payload.comment.user.login }}
+        run: |
+          USER=$(echo $ARGS | tr -d '@')
+          if [ -z "$USER" ]; then
+            USER=$COMMENTER
+          fi
+
+          case $COMMAND in
+            assign)
+              echo "Assigning $USER to #$ISSUE_NUMBER"
+              gh issue edit $ISSUE_NUMBER --repo $REPO --add-assignee "$USER"
+              ;;
+            unassign)
+              echo "Unassigning $USER from #$ISSUE_NUMBER"
+              gh issue edit $ISSUE_NUMBER --repo $REPO --remove-assignee "$USER"
+              ;;
+            cc)
+              echo "Requesting review from $USER"
+              gh pr review-request $ISSUE_NUMBER --repo $REPO --add-reviewer "$USER"
+              ;;
+            uncc)
+              echo "Removing review request for $USER"
+              gh pr review-request $ISSUE_NUMBER --repo $REPO --remove-reviewer "$USER"
+              ;;
+          esac

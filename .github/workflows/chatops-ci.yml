@@ -1,11 +1,13 @@
-name: ChatOps Retest
+name: ChatOps CI
 on:
   repository_dispatch:
     types: [retest-command]
+
 permissions:
   actions: write
   issues: write
   pull-requests: write
+
 jobs:
   retest:
     runs-on: ubuntu-latest
@@ -18,6 +20,4 @@ jobs:
           REPO: ${{ github.event.client_payload.github.payload.repository.full_name }}
         run: |
           echo "Triggering ci-tests for SHA: $SHA (PR #$PR_NUMBER)"
-          gh workflow run ci-tests.yml --ref main -f sha=$SHA -R $REPO
-
-
+          gh workflow run ci-tests.yml --ref main -f sha="$SHA" -R "$REPO"

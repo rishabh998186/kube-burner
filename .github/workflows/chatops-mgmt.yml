@@ -1,0 +1,57 @@
+name: ChatOps Management
+on:
+  repository_dispatch:
+    types: [help-command, close-command, reopen-command, lock-command, unlock-command]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  management:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Handle Management Commands
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.client_payload.github.payload.issue.number }}
+          REPO: ${{ github.event.client_payload.github.payload.repository.full_name }}
+          COMMAND: ${{ github.event.client_payload.slash_command.command }}
+        run: |
+          case $COMMAND in
+            help)
+              echo "Posting help guide to #$ISSUE_NUMBER"
+              gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "## 🤖 Prow ChatOps Commands
+
+              | Command | Usage | Description |
+              |---------|-------|-------------|
+              | \`/lgtm\` | \`/lgtm\` | Applies the \`lgtm\` label to a PR. |
+              | \`/approve\` | \`/approve\` | Applies the \`approved\` label. |
+              | \`/label\` | \`/label [label]\` | Adds a label (see \`.prowlabels.yaml\`). |
+              | \`/remove-label\` | \`/remove-label [label]\` | Removes a label. |
+              | \`/assign\` | \`/assign @user\` | Assigns the issue/PR to a user. |
+              | \`/unassign\` | \`/unassign @user\` | Unassigns a user. |
+              | \`/cc\` | \`/cc @user\` | Requests review from a user. |
+              | \`/retest\` | \`/retest\` | Triggers CI tests for the current commit. |
+              | \`/close\` | \`/close\` | Closes the issue/PR. |
+              | \`/reopen\` | \`/reopen\` | Reopens the issue/PR. |
+              | \`/hold\` | \`/hold\` | Applies \`do-not-merge/hold\` label. |
+              | \`/unhold\` | \`/unhold\` | Removes hold label. |"
+              ;;
+            close)
+              echo "Closing #$ISSUE_NUMBER"
+              gh issue close "$ISSUE_NUMBER" --repo "$REPO"
+              ;;
+            reopen)
+              echo "Reopening #$ISSUE_NUMBER"
+              gh issue reopen "$ISSUE_NUMBER" --repo "$REPO"
+              ;;
+            lock)
+              echo "Locking #$ISSUE_NUMBER"
+              gh issue lock "$ISSUE_NUMBER" --repo "$REPO"
+              ;;
+            unlock)
+              echo "Unlocking #$ISSUE_NUMBER"
+              gh issue unlock "$ISSUE_NUMBER" --repo "$REPO"
+              ;;
+          esac

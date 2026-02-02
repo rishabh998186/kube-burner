@@ -13,11 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Slash Command Dispatch
+        id: dispatch
         uses: peter-evans/slash-command-dispatch@v5
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CHATOPS_PAT }}
           reaction-token: ${{ secrets.GITHUB_TOKEN }}
-          reaction-type: "+1"
           commands: |
             lgtm
             approve
@@ -35,3 +35,11 @@ jobs:
             cc
             uncc
             help
+
+      - name: Add Thumbs Up on Command Receipt
+        if: steps.dispatch.outcome == 'success'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          comment-id: ${{ github.event.comment.id }}
+          reactions: "+1"

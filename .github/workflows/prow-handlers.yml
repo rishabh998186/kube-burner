@@ -1,0 +1,115 @@
+name: Prow Handlers
+on:
+  repository_dispatch:
+    types:
+      - lgtm-command
+      - approve-command
+      - hold-command
+      - unhold-command
+      - label-command
+      - remove-label-command
+      - assign-command
+      - unassign-command
+      - cc-command
+      - uncc-command
+      - close-command
+      - reopen-command
+      - lock-command
+      - unlock-command
+      - help-command
+      - retest-command
+
+permissions:
+  actions: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  automation_logic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code (for label validation)
+        if: github.event.action == 'label-command'
+        uses: actions/checkout@v4
+
+      - name: Execute Automation Logic
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.client_payload.github.payload.issue.number }}
+          REPO: ${{ github.event.client_payload.github.payload.repository.full_name }}
+          COMMAND: ${{ github.event.client_payload.slash_command.command }}
+          ARGS: ${{ github.event.client_payload.slash_command.args.all }}
+          COMMENTER: ${{ github.event.client_payload.github.payload.comment.user.login }}
+          SHA: ${{ github.event.client_payload.pull_request.head.sha }}
+        run: |
+          case $COMMAND in
+            lgtm)
+              echo "Adding 'lgtm' label to #$ISSUE_NUMBER"
+              gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "lgtm"
+              ;;
+            approve)
+              echo "Adding 'approved' label to #$ISSUE_NUMBER"
+              gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "approved"
+              ;;
+            hold)
+              echo "Adding 'do-not-merge/hold' label to #$ISSUE_NUMBER"
+              gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "do-not-merge/hold"
+              ;;
+            unhold)
+              echo "Removing 'do-not-merge/hold' label from #$ISSUE_NUMBER"
+              gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --remove-label "do-not-merge/hold"
+              ;;
+            label)
+              LABEL=$ARGS
+              echo "Adding label $LABEL to #$ISSUE_NUMBER"
+              gh issue edit $ISSUE_NUMBER --repo $REPO --add-label "$LABEL"
+              ;;
+            remove-label)
+              LABEL=$ARGS
+              echo "Removing label $LABEL from #$ISSUE_NUMBER"
+              gh issue edit $ISSUE_NUMBER --repo $REPO --remove-label "$LABEL"
+              ;;
+            assign|unassign)
+              USER=$(echo $ARGS | tr -d '@')
+              [ -z "$USER" ] && USER=$COMMENTER
+              ACTION="add-assignee"
+              [ "$COMMAND" == "unassign" ] && ACTION="remove-assignee"
+              echo "Performing $ACTION for $USER on #$ISSUE_NUMBER"
+              gh issue edit $ISSUE_NUMBER --repo $REPO --$ACTION "$USER"
+              ;;
+            cc|uncc)
+              USER=$(echo $ARGS | tr -d '@')
+              [ -z "$USER" ] && USER=$COMMENTER
+              ACTION="add-reviewer"
+              [ "$COMMAND" == "uncc" ] && ACTION="remove-reviewer"
+              echo "Performing $ACTION for $USER on PR #$ISSUE_NUMBER"
+              gh pr review-request $ISSUE_NUMBER --repo $REPO --$ACTION "$USER"
+              ;;
+            close|reopen|lock|unlock)
+              echo "Performing $COMMAND on #$ISSUE_NUMBER"
+              gh issue $COMMAND "$ISSUE_NUMBER" --repo "$REPO"
+              ;;
+            retest)
+              echo "Triggering ci-tests for SHA: $SHA (PR #$ISSUE_NUMBER)"
+              gh workflow run ci-tests.yml --ref main -f sha="$SHA" -R "$REPO"
+              ;;
+            help)
+              echo "Posting help guide to #$ISSUE_NUMBER"
+              gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "## 🤖 Automation Commands
+
+              | Command | Usage | Description |
+              |---------|-------|-------------|
+              | \`/lgtm\` | \`/lgtm\` | Applies the \`lgtm\` label. |
+              | \`/approve\` | \`/approve\` | Applies the \`approved\` label. |
+              | \`/label\` | \`/label [label]\` | Adds a label (see \`.prowlabels.yaml\`). |
+              | \`/remove-label\` | \`/remove-label [label]\` | Removes a label. |
+              | \`/assign\` | \`/assign @user\` | Assigns a user. |
+              | \`/unassign\` | \`/unassign @user\` | Unassigns a user. |
+              | \`/cc\` | \`/cc @user\` | Requests review. |
+              | \`/retest\` | \`/retest\` | Triggers CI tests. |
+              | \`/close\` | \`/close\` | Closes the issue/PR. |
+              | \`/reopen\` | \`/reopen\` | Reopens the issue/PR. |
+              | \`/hold\` | \`/hold\` | Applies \`do-not-merge/hold\`. |
+              | \`/unhold\` | \`/unhold\` | Removes hold. |"
+              ;;
+          esac

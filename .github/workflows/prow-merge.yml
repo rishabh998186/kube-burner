@@ -1,0 +1,33 @@
+name: Prow Auto-Merge
+on:
+  pull_request:
+    types: [labeled, unlabeled, synchronize, opened, reopened]
+  check_run:
+    types: [completed]
+
+jobs:
+  auto_merge:
+    runs-on: ubuntu-latest
+    if: github.repository == 'rishabh998186/kube-burner'
+    steps:
+      - name: Attempt Auto-Merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.check_run.pull_requests[0].number }}
+        run: |
+          # Fetch PR details
+          PR_DATA=$(gh pr view "$PR_NUMBER" --json labels,mergeable,statusCheckRollup)
+          
+          # Check for labels
+          HAS_LGTM=$(echo "$PR_DATA" | jq '.labels[].name' | grep -q "lgtm" && echo "true" || echo "false")
+          HAS_APPROVED=$(echo "$PR_DATA" | jq '.labels[].name' | grep -q "approved" && echo "true" || echo "false")
+          HAS_HOLD=$(echo "$PR_DATA" | jq '.labels[].name' | grep -q "do-not-merge/hold" && echo "true" || echo "false")
+          
+          echo "LGTM: $HAS_LGTM, Approved: $HAS_APPROVED, Hold: $HAS_HOLD"
+          
+          if [ "$HAS_LGTM" == "true" ] && [ "$HAS_APPROVED" == "true" ] && [ "$HAS_HOLD" == "false" ]; then
+            echo "Criteria met. Attempting merge..."
+            gh pr merge "$PR_NUMBER" --merge --auto
+          else
+            echo "Criteria not met for auto-merge."
+          fi

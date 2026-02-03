@@ -1,0 +1,46 @@
+name: Prow Dispatch
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  automation_dispatch:
+    permissions:
+      contents: read
+      actions: write
+      issues: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Automation Command Dispatch
+        id: dispatch
+        uses: peter-evans/slash-command-dispatch@v5
+        with:
+          token: ${{ secrets.CHATOPS_PAT }}
+          reaction-token: ${{ secrets.GITHUB_TOKEN }}
+          reactions: false
+          commands: |
+            lgtm
+            approve
+            hold
+            unhold
+            retest
+            assign
+            unassign
+            label
+            remove-label
+            close
+            reopen
+            lock
+            unlock
+            cc
+            uncc
+            help
+
+      - name: Add Thumbs Up on Command Receipt
+        if: steps.dispatch.outcome == 'success'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          comment-id: ${{ github.event.comment.id }}
+          reactions: "+1"

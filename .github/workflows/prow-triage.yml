@@ -8,14 +8,18 @@ jobs:
     runs-on: ubuntu-latest
     if: github.repository == 'rishabh998186/kube-burner'
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
       - name: Calculate PR Size
         id: size
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
           # Get additions and deletions
-          DIFF_DATA=$(gh pr view "$PR_NUMBER" --json additions,deletions)
+          DIFF_DATA=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json additions,deletions)
           ADDITIONS=$(echo "$DIFF_DATA" | jq -r '.additions')
           DELETIONS=$(echo "$DIFF_DATA" | jq -r '.deletions')
           TOTAL=$((ADDITIONS + DELETIONS))
@@ -40,17 +44,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
           LABEL: ${{ steps.size.outputs.size }}
         run: |
           echo "Applying label $LABEL to PR #$PR_NUMBER"
           
           # Remove existing size labels first to avoid clutter
-          EXISTING_LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' | grep "^size/" || true)
+          EXISTING_LABELS=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '.labels[].name' | grep "^size/" || true)
           for l in $EXISTING_LABELS; do
             if [ "$l" != "$LABEL" ]; then
-              gh pr edit "$PR_NUMBER" --remove-label "$l" || true
+              gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "$l" || true
             fi
           done
           
           # Add the new size label
-          gh pr edit "$PR_NUMBER" --add-label "$LABEL"
+          gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "$LABEL"

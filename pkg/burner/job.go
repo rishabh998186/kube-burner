@@ -428,10 +428,8 @@ func (ex *JobExecutor) gc(ctx context.Context, wg *sync.WaitGroup) {
 				namespacesToDelete = append(namespacesToDelete, ns.Name)
 			}
 			CleanupNamespacesUsingGVR(ctx, *ex, namespacesToDelete)
-			err := util.CleanupNamespacesByLabel(ctx, ex.clientSet, labelSelector)
-			if err != nil {
-				log.Error(err.Error())
-			}
+			// Note: GVR strategy intentionally does NOT delete namespaces,
+			// only the objects within them. This preserves namespaces for inspection.
 		}
 	} else {
 		err := util.CleanupNamespacesByLabel(ctx, ex.clientSet, labelSelector)

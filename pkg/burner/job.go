@@ -21,6 +21,7 @@ import (
 	"math"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cloud-bulldozer/go-commons/v2/indexers"
@@ -125,20 +126,59 @@ func Run(configSpec config.Spec, kubeClientProvider *config.KubeClientProvider, 
 					log.Infof("Churn percent: %v", jobExecutor.ChurnConfig.Percent)
 					log.Infof("Churn delay: %v", jobExecutor.ChurnConfig.Delay)
 					log.Infof("Churn type: %v", jobExecutor.ChurnConfig.Mode)
-				}
-				if jobErrs := jobExecutor.RunCreateJob(ctx, 0, jobExecutor.JobIterations); jobErrs != nil {
-					errs = append(errs, jobErrs...)
-					innerRC = 1
-				}
-				if ctx.Err() != nil {
-					return
-				}
-				if config.IsChurnEnabled(jobExecutor.Job) {
-					churnStart := time.Now().UTC()
-					executedJobs[jobExecutorIdx].ChurnStart = &churnStart
-					jobExecutor.RunCreateJobWithChurn(ctx)
-					churnEnd := time.Now().UTC()
-					executedJobs[jobExecutorIdx].ChurnEnd = &churnEnd
+
+					// Determine when to start churn
+					startThreshold := jobExecutor.ChurnConfig.StartAfterIterations
+					if startThreshold <= 0 {
+						startThreshold = jobExecutor.JobIterations // Default: wait for all iterations
+					}
+					log.Infof("Churn will start after %d iterations complete", startThreshold)
+
+					// Start churn in background goroutine
+					var churnWg sync.WaitGroup
+					churnCtx, churnCancel := context.WithCancel(ctx)
+					defer churnCancel()
+
+					churnWg.Add(1)
+					go func() {
+						defer churnWg.Done()
+
+						// Wait for threshold iterations to complete
+						for {
+							select {
+							case <-churnCtx.Done():
+								return
+							case <-time.After(5 * time.Second):
+								completed := atomic.LoadInt32(&jobExecutor.completedIterations)
+								if completed >= int32(startThreshold) {
+									log.Infof("Starting churn after %d iterations completed", completed)
+									goto startChurn
+								}
+							}
+						}
+
+					startChurn:
+						churnStart := time.Now().UTC()
+						executedJobs[jobExecutorIdx].ChurnStart = &churnStart
+						jobExecutor.RunCreateJobWithChurn(churnCtx)
+						churnEnd := time.Now().UTC()
+						executedJobs[jobExecutorIdx].ChurnEnd = &churnEnd
+					}()
+
+					// Main job execution continues in parallel
+					if jobErrs := jobExecutor.RunCreateJob(ctx, 0, jobExecutor.JobIterations); jobErrs != nil {
+						errs = append(errs, jobErrs...)
+						innerRC = 1
+					}
+
+					// Wait for background churn to complete
+					churnWg.Wait()
+				} else {
+					// No churn - execute job normally
+					if jobErrs := jobExecutor.RunCreateJob(ctx, 0, jobExecutor.JobIterations); jobErrs != nil {
+						errs = append(errs, jobErrs...)
+						innerRC = 1
+					}
 				}
 				// If object verification is enabled
 				if jobExecutor.VerifyObjects && !jobExecutor.Verify() {

@@ -244,6 +244,8 @@ type ChurnConfig struct {
 	Delay time.Duration `yaml:"delay" json:"delay,omitempty"`
 	// Churning mode
 	Mode ChurnMode `yaml:"mode" json:"mode,omitempty"`
+	// Start churn after N iterations complete (0 = wait for all iterations)
+	StartAfterIterations int `yaml:"startAfterIterations" json:"startAfterIterations,omitempty"`
 }
 
 type KubeClientProvider struct {

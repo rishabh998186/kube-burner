@@ -69,12 +69,25 @@ func (ex *JobExecutor) setupCreateJob() {
 		if err != nil {
 			log.Fatalf("Error reading template %s: %s", o.ObjectTemplate, err)
 		}
-		// Deserialize YAML
-		cleanTemplate, err := util.CleanupTemplate(t)
-		if err != nil {
-			log.Fatalf("Error cleaning up template %s: %s", o.ObjectTemplate, err)
+
+		// Pre-render template with placeholder values to extract GVK
+		// This enables templated kinds like "TestCRD{{.Iteration}}"
+		templateData := map[string]any{
+			jobName:      ex.Name,
+			jobIteration: 0,
+			jobUUID:      ex.uuid,
+			jobRunId:     ex.runid,
+			replica:      1,
 		}
-		unsList, gvks := yamlToUnstructuredMultiple(o.ObjectTemplate, cleanTemplate)
+		maps.Copy(templateData, o.InputVars)
+
+		templateOption := util.MissingKeyZero // Allow missing keys during setup
+		preRenderedTemplate, err := util.RenderTemplate(t, templateData, templateOption, ex.functionTemplates)
+		if err != nil {
+			log.Fatalf("Template error in %s: %s", o.ObjectTemplate, err)
+		}
+
+		unsList, gvks := yamlToUnstructuredMultiple(o.ObjectTemplate, preRenderedTemplate)
 
 		// Get GVK for this specific object and Process if multi yaml document
 		for i, gvk := range gvks {
@@ -182,6 +195,8 @@ func (ex *JobExecutor) RunCreateJob(ctx context.Context, iterationStart, iterati
 			log.Infof("Sleeping for %v", ex.JobIterationDelay)
 			time.Sleep(ex.JobIterationDelay)
 		}
+		// Increment completed iterations counter for background churn threshold
+		atomic.AddInt32(&ex.completedIterations, 1)
 	}
 	// Wait for all replicas to be created
 	wg.Wait()
@@ -228,14 +243,20 @@ func (ex *JobExecutor) replicaHandler(ctx context.Context, labels map[string]str
 			updateChildLabels(newObject, objectLabels)
 
 			// Before attempting to create an object, this error check confirms the REST mapping exists.
-			// If the mapping fails, the function returns early, preventing a futile create attempt.
+			// If the mapping fails, reset the mapper cache and retry - the CRD may have been created
+			// in the same job (common with templated kinds like TestCRD{{.Iteration}}).
 			// The object's GVK might not have been resolvable during setupCreateJob() - perhaps the
 			// corresponding CRD might not be installed or the kube-apiserver isn't reachable at the moment.
 			_, err := ex.mapper.RESTMapping(gvk.GroupKind())
 
 			if err != nil {
-				log.Errorf("Error getting REST Mapping for %v: %v", gvk, err)
-				return
+				// Reset the mapper cache and retry - CRD may have been created earlier in this job
+				ex.mapper.Reset()
+				_, err = ex.mapper.RESTMapping(gvk.GroupKind())
+				if err != nil {
+					log.Errorf("Error getting REST Mapping for %v: %v", gvk, err)
+					return
+				}
 			}
 			// replicaWg is necessary because we want to wait for all replicas
 			// to be created before running any other action such as verify objects,

@@ -1,0 +1,9 @@
+apiVersion: testcrd.example.com/v1
+kind: TestCRD{{.Iteration}}
+metadata:
+  name: test{{.Replica}}
+  labels:
+    kube-burner.io/test: "templated-kind"
+spec:
+  workload: {{randAlpha 5}}
+  iterations: {{.Iteration}}
